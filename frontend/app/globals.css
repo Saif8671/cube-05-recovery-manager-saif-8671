@@ -1,0 +1,408 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ================================================================
+   RCY RECOVERY MANAGER — GLOBAL LIGHT DESIGN SYSTEM
+   Modern, trustworthy SaaS interface with Amazon-inspired hierarchy
+   ================================================================ */
+
+:root {
+  /* Surface / Backgrounds (Predominantly White & Light Gray) */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F7F8FA;
+  --bg-subtle: #F3F4F6;
+  --surface-base: #FFFFFF;
+  --surface-primary: #FFFFFF;
+  --surface-secondary: #F7F8FA;
+  --surface-elevated: #FFFFFF;
+  --surface-hover: #F7F8FA;
+
+  /* Typography / Text Hierarchy */
+  --text-primary: #111827;
+  --text-secondary: #4B5563;
+  --text-muted: #6B7280;
+  --text-inverted: #FFFFFF;
+
+  /* Border System */
+  --border-default: #E5E7EB;
+  --border-strong: #D1D5DB;
+  --border-subtle: #F3F4F6;
+  --border-accent: #FF9900;
+
+  /* Brand Accents (Amazon-Inspired Primary) */
+  --accent-primary: #FF9900;
+  --accent-hover: #E88A00;
+  --accent-active: #D97706;
+  --highlight-yellow: #FFD814;
+  --highlight-yellow-hover: #F7CA00;
+
+  /* Semantic Status Tokens (Light tinted bg + dark readable text) */
+  --status-success: #067D68;
+  --status-success-bg: #ECFDF5;
+  --status-success-border: #A7F3D0;
+
+  --status-warning: #B45309;
+  --status-warning-bg: #FEF3C7;
+  --status-warning-border: #FDE68A;
+
+  --status-error: #C40000;
+  --status-error-bg: #FEE2E2;
+  --status-error-border: #FECACA;
+
+  --status-info: #2563EB;
+  --status-info-bg: #EFF6FF;
+  --status-info-border: #BFDBFE;
+
+  --status-neutral: #4B5563;
+  --status-neutral-bg: #F3F4F6;
+  --status-neutral-border: #E5E7EB;
+
+  --status-pending: #D97706;
+  --status-pending-bg: #FFFBEB;
+  --status-pending-border: #FDE68A;
+
+  /* Restrained Radius System */
+  --radius-control: 6px;
+  --radius-input: 8px;
+  --radius-btn: 8px;
+  --radius-card: 12px;
+  --radius-section: 16px;
+
+  /* Subtle Shadow System */
+  --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.14);
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ================================================================
+   BASE STYLES
+   ================================================================ */
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: rgba(255, 153, 0, 0.2);
+  color: #111827;
+}
+
+/* ================================================================
+   SUBTLE MODERN SCROLLBAR
+   ================================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ================================================================
+   COMPONENT LAYER & DESIGN TOKENS
+   ================================================================ */
+
+@layer components {
+  /* Typography Scale */
+  .text-page-title {
+    font-size: 1.875rem; /* 30px */
+    line-height: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    color: var(--text-primary);
+  }
+  .text-section-title {
+    font-size: 1.375rem; /* 22px */
+    line-height: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+  .text-card-title {
+    font-size: 1.0625rem; /* 17px */
+    line-height: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .text-body {
+    font-size: 0.9375rem; /* 15px */
+    line-height: 1.375rem;
+    font-weight: 400;
+    color: var(--text-primary);
+  }
+  .text-secondary-label {
+    font-size: 0.8125rem; /* 13px */
+    line-height: 1.125rem;
+    color: var(--text-secondary);
+  }
+  .text-metadata {
+    font-size: 0.75rem; /* 12px */
+    line-height: 1rem;
+    color: var(--text-muted);
+  }
+
+  /* Card System */
+  .card-base,
+  .command-card {
+    background-color: #FFFFFF;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-subtle);
+    transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+  }
+  .card-base:hover,
+  .command-card:hover,
+  .card-hover:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .command-card-hero {
+    background-color: #FFFFFF;
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-card);
+    box-shadow: 0 2px 8px rgba(255, 153, 0, 0.12);
+    transition: all var(--transition-normal);
+  }
+  .command-card-hero:hover {
+    border-color: var(--accent-hover);
+    box-shadow: 0 4px 12px rgba(255, 153, 0, 0.18);
+  }
+
+  .glass-surface,
+  .glass-surface-strong {
+    background-color: #FFFFFF;
+    border: 1px solid var(--border-default);
+    box-shadow: var(--shadow-subtle);
+  }
+
+  /* Button System */
+  /* PRIMARY: #FF9900, Dark text #111827, font-weight 600, border none, hover darker orange */
+  .btn-primary {
+    @apply inline-flex items-center justify-center space-x-2 px-4 py-2 font-semibold text-sm transition-all;
+    background-color: #FF9900;
+    color: #111827;
+    border-radius: var(--radius-btn);
+    border: none;
+    box-shadow: var(--shadow-subtle);
+    cursor: pointer;
+  }
+  .btn-primary:hover {
+    background-color: #E88A00;
+  }
+  .btn-primary:active {
+    background-color: #D97706;
+  }
+  .btn-primary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #FF9900;
+  }
+
+  /* SECONDARY: White background, Dark text #111827, #D1D5DB border, hover #F7F8FA */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center space-x-2 px-4 py-2 font-semibold text-sm transition-all;
+    background-color: #FFFFFF;
+    color: #111827;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-btn);
+    box-shadow: var(--shadow-subtle);
+    cursor: pointer;
+  }
+  .btn-secondary:hover {
+    background-color: #F7F8FA;
+    border-color: #9CA3AF;
+  }
+  .btn-secondary:active {
+    background-color: #F3F4F6;
+  }
+  .btn-secondary:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #D1D5DB;
+  }
+
+  /* DANGER BUTTON */
+  .btn-danger {
+    @apply inline-flex items-center justify-center space-x-2 px-4 py-2 font-semibold text-sm transition-all;
+    background-color: var(--status-error-bg);
+    color: var(--status-error);
+    border: 1px solid var(--status-error-border);
+    border-radius: var(--radius-btn);
+    cursor: pointer;
+  }
+  .btn-danger:hover {
+    background-color: #FCDCDC;
+  }
+
+  /* GHOST BUTTON */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all;
+    color: var(--text-secondary);
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-ghost:hover {
+    background-color: var(--bg-subtle);
+    color: var(--text-primary);
+  }
+
+  /* Input System: White bg, #D1D5DB border, #111827 text, #6B7280 placeholder, orange focus ring, 40-44px height */
+  .input-base {
+    background-color: #FFFFFF;
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    border-radius: var(--radius-input);
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    min-height: 40px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  }
+  .input-base::placeholder {
+    color: var(--text-muted);
+  }
+  .input-base:focus,
+  .input-focus:focus {
+    outline: none;
+    border-color: var(--border-accent);
+    box-shadow: 0 0 0 3px rgba(255, 153, 0, 0.2);
+  }
+  .input-focus {
+    background-color: #FFFFFF;
+    color: var(--text-primary);
+  }
+  .input-focus::placeholder {
+    color: var(--text-muted);
+  }
+
+  /* Semantic Status Badge System (Light tinted bg + dark readable text) */
+  .status-success,
+  .badge-contradicted {
+    background-color: var(--status-success-bg);
+    color: var(--status-success);
+    border: 1px solid var(--status-success-border);
+  }
+  .status-error,
+  .badge-supported {
+    background-color: var(--status-error-bg);
+    color: var(--status-error);
+    border: 1px solid var(--status-error-border);
+  }
+  .status-neutral,
+  .badge-silent {
+    background-color: var(--status-neutral-bg);
+    color: var(--status-neutral);
+    border: 1px solid var(--status-neutral-border);
+  }
+  .status-warning,
+  .badge-uncertain {
+    background-color: var(--status-warning-bg);
+    color: var(--status-warning);
+    border: 1px solid var(--status-warning-border);
+  }
+  .status-pending,
+  .badge-duplicate {
+    background-color: var(--status-pending-bg);
+    color: var(--status-pending);
+    border: 1px solid var(--status-pending-border);
+  }
+  .status-info,
+  .badge-already-reimbursed {
+    background-color: var(--status-info-bg);
+    color: var(--status-info);
+    border: 1px solid var(--status-info-border);
+  }
+
+  /* Table UI */
+  .table-row-hover {
+    transition: background-color var(--transition-fast);
+  }
+  .table-row-hover:hover {
+    background-color: var(--bg-secondary);
+  }
+
+  /* Page enter animation */
+  .page-enter {
+    animation: fadeInUp 0.3s ease-out;
+  }
+
+  /* Live pulse beacon */
+  .beacon-dot {
+    position: relative;
+  }
+  .beacon-dot::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 9999px;
+    background: rgba(255, 153, 0, 0.4);
+    animation: beaconAnim 2s infinite ease-out;
+  }
+
+  /* Compatibility overrides for legacy hardcoded dark tokens so all screens stay light */
+  .bg-\[\#080c15\] {
+    background-color: var(--bg-primary) !important;
+  }
+  .bg-\[\#0a0f1b\] {
+    background-color: var(--bg-primary) !important;
+  }
+}
+
+@keyframes beaconAnim {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+  body * {
+    visibility: hidden;
+  }
+  #printable-claim-dossier, #printable-claim-dossier * {
+    visibility: visible;
+  }
+  #printable-claim-dossier {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 24px;
+    background: #ffffff !important;
+    color: #111827 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  #printable-claim-dossier * {
+    color: #111827 !important;
+    background: transparent !important;
+    border-color: #E5E7EB !important;
+  }
+  #printable-claim-dossier table,
+  #printable-claim-dossier th,
+  #printable-claim-dossier td {
+    border: 1px solid #E5E7EB !important;
+  }
+}
