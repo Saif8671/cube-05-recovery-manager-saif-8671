@@ -16,8 +16,6 @@ import {
 } from "lucide-react";
 import {
   ResponsiveContainer,
-  PieChart,
-  Pie,
   Cell,
   Tooltip,
   BarChart,
@@ -25,21 +23,92 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  LabelList,
 } from "recharts";
 import { MetricCardSkeleton, TableSkeletonRows } from "../../components/LoadingSkeleton";
 
+// Helper to extract clean verdict display name (e.g. "Contradicted" from "Contradicted (Recoverable)")
+const cleanVerdictName = (name) => {
+  if (!name) return "";
+  return name.replace(/\s*\([^)]*\)/g, "").trim();
+};
+
+// Helper to wrap long category labels into two lines cleanly
+const splitCategoryLabel = (label, maxLength = 16) => {
+  if (!label) return ["", ""];
+  if (label.includes(" / ")) {
+    const parts = label.split(" / ");
+    return [parts[0] + " /", parts.slice(1).join(" / ")];
+  }
+  if (label.includes("/")) {
+    const parts = label.split("/");
+    return [parts[0] + " /", parts.slice(1).join("/")];
+  }
+  if (label.length <= maxLength) {
+    return [label, ""];
+  }
+  const words = label.split(" ");
+  if (words.length <= 1) {
+    return [label, ""];
+  }
+  let bestIdx = 1;
+  let bestDiff = Infinity;
+  const target = label.length / 2;
+  let currentLen = 0;
+  for (let i = 0; i < words.length - 1; i++) {
+    currentLen += words[i].length + (i > 0 ? 1 : 0);
+    const diff = Math.abs(currentLen - target);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestIdx = i + 1;
+    }
+  }
+  return [words.slice(0, bestIdx).join(" "), words.slice(bestIdx).join(" ")];
+};
+
+// Custom YAxis tick component for category chart with clean multi-line wrapping
+const CategoryYAxisTick = ({ x, y, payload }) => {
+  const text = String(payload?.value || "");
+  const [line1, line2] = splitCategoryLabel(text, 16);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={-8}
+        y={0}
+        textAnchor="end"
+        fill="#374151"
+        fontSize={11}
+        fontWeight={500}
+      >
+        {line2 ? (
+          <>
+            <tspan x={-8} dy="-0.45em">{line1}</tspan>
+            <tspan x={-8} dy="1.15em">{line2}</tspan>
+          </>
+        ) : (
+          <tspan x={-8} dy="0.32em">{line1}</tspan>
+        )}
+      </text>
+    </g>
+  );
+};
+
 // Custom light-theme tooltips for Recharts
-const CustomPieTooltip = ({ active, payload }) => {
+const CustomVerdictTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const data = payload[0];
+    const item = data.payload;
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-elevated p-2.5 text-xs text-gray-900 min-w-[130px]">
         <div className="flex items-center space-x-2">
           <span
             className="w-2.5 h-2.5 rounded-full shrink-0 shadow-subtle"
-            style={{ backgroundColor: data.payload.color }}
+            style={{ backgroundColor: item.color }}
           />
-          <span className="font-semibold text-gray-900">{data.name}</span>
+          <span className="font-semibold text-gray-900">
+            {item.displayName || data.name}
+          </span>
         </div>
         <div className="text-gray-600 mt-1.5 flex items-center justify-between font-mono">
           <span className="text-[11px] text-gray-500">Verdicts:</span>
@@ -51,12 +120,12 @@ const CustomPieTooltip = ({ active, payload }) => {
   return null;
 };
 
-const CustomBarTooltip = ({ active, payload, label }) => {
+const CustomCategoryTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const data = payload[0];
     return (
       <div className="bg-white border border-gray-200 rounded-lg shadow-elevated p-2.5 text-xs text-gray-900 min-w-[140px]">
-        <div className="font-semibold text-gray-900 truncate">{label || data.name}</div>
+        <div className="font-semibold text-gray-900">{label || data.name}</div>
         <div className="text-gray-600 mt-1.5 flex items-center justify-between font-mono">
           <span className="text-[11px] text-gray-500">Deductions:</span>
           <span className="font-bold text-[#FF9900]">{data.value}</span>
@@ -141,11 +210,35 @@ export default function DashboardPage() {
     }
   };
 
-  // Aggregate verdict total for donut center display
+  // Aggregate verdict total for header display
   const totalVerdicts = metrics?.status_distribution?.reduce(
     (acc, curr) => acc + (curr.value || 0),
     0
   );
+
+  // Ranked verdicts descending by count
+  const sortedVerdicts = React.useMemo(() => {
+    if (!metrics?.status_distribution) return [];
+    return [...metrics.status_distribution]
+      .map((item) => ({
+        ...item,
+        displayName: cleanVerdictName(item.name),
+        value: item.value || 0,
+        color: item.color || "#64748b",
+      }))
+      .sort((a, b) => b.value - a.value);
+  }, [metrics?.status_distribution]);
+
+  // Ranked categories descending by count
+  const sortedCategories = React.useMemo(() => {
+    if (!metrics?.charge_type_distribution) return [];
+    return [...metrics.charge_type_distribution]
+      .map((item) => ({
+        ...item,
+        count: item.count || 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [metrics?.charge_type_distribution]);
 
   return (
     <div className="flex-1 flex flex-col min-h-screen bg-[#F7F8FA]">
@@ -308,11 +401,15 @@ export default function DashboardPage() {
         </div>
 
         {/* ============================================================ */}
-        {/* 3. FORENSIC ANALYTICS GRID (DONUT & CATEGORY BAR)            */}
+        {/* 3. FORENSIC ANALYTICS GRID (VERDICT & CATEGORY RANKED BARS)  */}
         {/* ============================================================ */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* CHART 1: Assessment Verdicts (Donut) */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-subtle flex flex-col justify-between">
+          {/* CHART 1: Assessment Verdicts (Horizontal Ranked Bar Chart) */}
+          <div
+            className="bg-white border border-gray-200 rounded-xl p-5 sm:p-6 shadow-subtle flex flex-col justify-between"
+            role="region"
+            aria-label="Evidence Assessment Verdicts"
+          >
             <div className="flex items-start justify-between border-b border-gray-100 pb-4">
               <div>
                 <div className="flex items-center space-x-2">
@@ -326,99 +423,24 @@ export default function DashboardPage() {
                 </p>
               </div>
               {totalVerdicts !== undefined && (
-                <span className="text-[11px] font-mono text-gray-700 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 font-semibold">
+                <span className="text-[11px] font-mono text-gray-700 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 font-semibold shrink-0">
                   {totalVerdicts} Audited
                 </span>
               )}
             </div>
 
-            <div className="py-4 relative flex items-center justify-center min-h-[260px]">
-              {metrics?.status_distribution ? (
-                <div className="w-full h-64 relative flex items-center justify-center">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={metrics.status_distribution}
-                        innerRadius={70}
-                        outerRadius={95}
-                        paddingAngle={4}
-                        dataKey="value"
-                        stroke="#FFFFFF"
-                        strokeWidth={2}
-                        animationDuration={800}
-                      >
-                        {metrics.status_distribution.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<CustomPieTooltip />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-
-                  {/* Centered Donut Summary */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                    <span className="text-3xl font-extrabold text-gray-900 font-mono tracking-tight">
-                      {totalVerdicts ?? "--"}
-                    </span>
-                    <span className="text-[10px] uppercase font-bold text-gray-500 tracking-widest mt-0.5">
-                      Verdicts
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center space-y-3 text-gray-400 py-16">
+            <div className="py-4 h-[320px] w-full flex items-center justify-center">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center space-y-3 text-gray-400">
                   <div className="w-8 h-8 border-2 border-orange-200 border-t-[#FF9900] rounded-full animate-spin" />
                   <span className="text-xs font-mono">Synthesizing verdicts...</span>
                 </div>
-              )}
-            </div>
-
-            {/* Custom Interactive Legend Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-4 border-t border-gray-100 mt-2">
-              {metrics?.status_distribution?.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center space-x-2.5 p-2 rounded-lg bg-gray-50 border border-gray-200 text-xs transition-colors hover:border-gray-300"
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0 shadow-subtle"
-                    style={{ backgroundColor: item.color }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[11px] text-gray-500 truncate">{item.name}</div>
-                    <div className="font-bold text-gray-900 font-mono text-xs">{item.value}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* CHART 2: Deductions by Category (Horizontal Bar) */}
-          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-subtle flex flex-col justify-between">
-            <div className="flex items-start justify-between border-b border-gray-100 pb-4">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-600" />
-                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
-                    Deductions by Category
-                  </h3>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Top marketplace fee categories assessed for this seller.
-                </p>
-              </div>
-              <span className="text-[11px] font-mono text-gray-700 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 font-semibold">
-                {metrics?.charge_type_distribution?.length || 0} Categories
-              </span>
-            </div>
-
-            <div className="py-4 h-64">
-              {metrics?.charge_type_distribution ? (
+              ) : sortedVerdicts.length > 0 && totalVerdicts > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={metrics.charge_type_distribution}
+                    data={sortedVerdicts}
                     layout="vertical"
-                    margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                    margin={{ top: 8, right: 35, left: 10, bottom: 8 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
                     <XAxis
@@ -427,38 +449,136 @@ export default function DashboardPage() {
                       fontSize={11}
                       tickLine={false}
                       axisLine={{ stroke: "#E5E7EB" }}
+                      allowDecimals={false}
+                      domain={[0, (dataMax) => Math.max(1, Math.ceil((dataMax || 0) * 1.15))]}
+                    />
+                    <YAxis
+                      dataKey="displayName"
+                      type="category"
+                      stroke="#374151"
+                      tick={{ fill: "#374151", fontSize: 12, fontWeight: 500 }}
+                      width={125}
+                      tickLine={false}
+                      axisLine={{ stroke: "#E5E7EB" }}
+                      interval={0}
+                    />
+                    <Tooltip content={<CustomVerdictTooltip />} cursor={{ fill: "#F9FAFB" }} />
+                    <Bar
+                      dataKey="value"
+                      radius={[0, 4, 4, 0]}
+                      animationDuration={800}
+                      barSize={20}
+                    >
+                      {sortedVerdicts.map((entry, index) => (
+                        <Cell key={`verdict-cell-${index}`} fill={entry.color} />
+                      ))}
+                      <LabelList
+                        dataKey="value"
+                        position="right"
+                        offset={8}
+                        fill="#111827"
+                        fontSize={12}
+                        fontWeight={600}
+                        fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center space-y-2 text-gray-400">
+                  <FileQuestion className="w-8 h-8 text-gray-300" />
+                  <span className="text-xs font-medium text-gray-500">
+                    No assessment verdicts available
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* CHART 2: Deductions by Category (Horizontal Ranked Bar Chart) */}
+          <div
+            className="bg-white border border-gray-200 rounded-xl p-5 sm:p-6 shadow-subtle flex flex-col justify-between"
+            role="region"
+            aria-label="Deductions by Category"
+          >
+            <div className="flex items-start justify-between border-b border-gray-100 pb-4">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="w-2 h-2 rounded-full bg-[#FF9900]" />
+                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+                    Deductions by Category
+                  </h3>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Top marketplace fee categories assessed for this seller.
+                </p>
+              </div>
+              <span className="text-[11px] font-mono text-gray-700 bg-gray-100 px-2.5 py-1 rounded-lg border border-gray-200 font-semibold shrink-0">
+                {metrics?.charge_type_distribution?.length || 0} Categories
+              </span>
+            </div>
+
+            <div className="py-4 h-[320px] w-full flex items-center justify-center">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center space-y-3 text-gray-400">
+                  <div className="w-8 h-8 border-2 border-orange-200 border-t-[#FF9900] rounded-full animate-spin" />
+                  <span className="text-xs font-mono">Aggregating categories...</span>
+                </div>
+              ) : sortedCategories.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={sortedCategories}
+                    layout="vertical"
+                    margin={{ top: 8, right: 35, left: 10, bottom: 8 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
+                    <XAxis
+                      type="number"
+                      stroke="#9CA3AF"
+                      fontSize={11}
+                      tickLine={false}
+                      axisLine={{ stroke: "#E5E7EB" }}
+                      allowDecimals={false}
+                      domain={[0, (dataMax) => Math.max(1, Math.ceil((dataMax || 0) * 1.15))]}
                     />
                     <YAxis
                       dataKey="name"
                       type="category"
-                      stroke="#4B5563"
-                      fontSize={11}
-                      width={140}
+                      stroke="#374151"
+                      width={135}
                       tickLine={false}
                       axisLine={{ stroke: "#E5E7EB" }}
+                      interval={0}
+                      tick={<CategoryYAxisTick />}
                     />
-                    <Tooltip content={<CustomBarTooltip />} />
+                    <Tooltip content={<CustomCategoryTooltip />} cursor={{ fill: "#F9FAFB" }} />
                     <Bar
                       dataKey="count"
                       fill="#FF9900"
-                      radius={[0, 6, 6, 0]}
+                      radius={[0, 4, 4, 0]}
                       animationDuration={800}
-                    />
+                      barSize={16}
+                    >
+                      <LabelList
+                        dataKey="count"
+                        position="right"
+                        offset={8}
+                        fill="#111827"
+                        fontSize={11}
+                        fontWeight={600}
+                        fontFamily="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+                      />
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center space-y-3 text-gray-400 py-16">
-                  <div className="w-8 h-8 border-2 border-orange-200 border-t-[#FF9900] rounded-full animate-spin" />
-                  <span className="text-xs font-mono">Aggregating categories...</span>
+                <div className="flex flex-col items-center justify-center space-y-2 text-gray-400">
+                  <FileQuestion className="w-8 h-8 text-gray-300" />
+                  <span className="text-xs font-medium text-gray-500">
+                    No deduction categories available
+                  </span>
                 </div>
               )}
-            </div>
-
-            <div className="pt-4 border-t border-gray-100 mt-2 flex items-center justify-between text-[11px] text-gray-500">
-              <span>Classified via automated document parser</span>
-              <span className="font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-semibold">
-                100% Channel Coverage
-              </span>
             </div>
           </div>
         </div>
