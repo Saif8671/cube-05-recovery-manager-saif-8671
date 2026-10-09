@@ -31,7 +31,13 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def init_db():
+    if db_url.startswith("sqlite:///"):
+        db_file = db_url.replace("sqlite:///", "", 1)
+        if db_file and db_file != ":memory:":
+            from pathlib import Path
+            Path(db_file).parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)
+
 
 def get_db():
     db = SessionLocal()

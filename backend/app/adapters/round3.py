@@ -26,10 +26,14 @@ from app.agents.recovery_agent import RecoveryAgent
 from app.rag.retrieval import hybrid_retrieval_engine
 from app.services.llm_reasoner import LLMRecoveryReasoner
 
+import logging
+
 round3_router = APIRouter(tags=["Round 3 Adapter"])
+logger = logging.getLogger("recovery_manager.round3")
 
 # In-memory idempotency cache: (org_id, workflow_id, unit_id, input_hash) -> response dict
 _IDEMPOTENCY_CACHE: Dict[str, Dict[str, Any]] = {}
+
 
 
 def _canonical_json_sha256(data: Any) -> str:
@@ -386,9 +390,20 @@ async def run_recovery_adapter(
     workflow_id = str(body.get("workflow_id") or body.get("id") or f"wf-{uuid.uuid4().hex[:8]}")
     stage = str(body.get("stage") or "recovery")
 
+    # Validate action/operation if specified
+    requested_action = body.get("action") or body.get("operation")
+    if requested_action is not None:
+        supported_actions = {"investigate", "recovery", "run", "audit", "evaluate", "default"}
+        if str(requested_action).lower() not in supported_actions:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Unsupported operation or action: '{requested_action}'. Supported operations: {sorted(list(supported_actions))}"
+            )
+
     # 2. Extract and validate subject
     subject = _extract_subject_info(body)
     unit_id = subject.get("unit_id") or "unspecified_unit"
+
 
     # Idempotency check: (org_id, workflow_id, unit_id, input_sha256)
     cache_key = f"{org_id}:{workflow_id}:{unit_id}:{input_sha256}"
@@ -404,8 +419,10 @@ async def run_recovery_adapter(
 
     # Reset LLM reasoner call info tracker
     LLMRecoveryReasoner.reset_call_info()
+    logger.info("Evaluating %d charges for tenant '%s', workflow '%s' against %d evidence records", len(charges_to_investigate), org_id, workflow_id, len(evidence_records))
 
     # 4. Create request-scoped isolated database session
+
     mem_engine, mem_session = _setup_isolated_session(shared_db, org_id, evidence_records)
 
     checks: List[Dict[str, Any]] = []

@@ -1,0 +1,141 @@
+{
+  "name": "recovery",
+  "display_name": "RCY Recovery Manager Agent",
+  "version": "1.0.0",
+  "pod": "pod-3",
+  "stage": "recovery",
+  "description": "Evidence-grounded financial claims engine for investigating fee deductions and recovering marketplace charges across warehouse and fulfillment operations",
+  "execution_mode": "service",
+  "protocol": "http",
+  "service_url": "${RECOVERY_AGENT_URL:-http://localhost:8000}",
+  "endpoints": {
+    "run": {
+      "path": "/run",
+      "method": "POST",
+      "description": "Investigate fee report lines against operational evidence and produce defensible recovery claims",
+      "auth_header": "X-API-Key",
+      "tenant_header": "X-Org-ID",
+      "timeout_seconds": 30
+    },
+    "health": {
+      "path": "/health",
+      "method": "GET",
+      "description": "Liveness probe"
+    },
+    "health_ready": {
+      "path": "/health/ready",
+      "method": "GET",
+      "description": "Readiness probe verifying database connectivity"
+    }
+  },
+  "auth": {
+    "type": "api_key",
+    "header": "X-API-Key",
+    "env_var": "AGENT_API_KEY",
+    "optional_if_auth_disabled": true
+  },
+  "tenancy": {
+    "header": "X-Org-ID",
+    "body_field": "subject.org_id",
+    "env_var": "ALLOWED_ORGS",
+    "default_allowed_orgs": ["org_demo_alpha", "org_demo_bravo"]
+  },
+  "capabilities": [
+    "fee_investigation",
+    "operational_evidence_reconciliation",
+    "duplicate_billing_detection",
+    "reimbursement_offset_detection",
+    "unit_ledger_double_claim_prevention",
+    "claim_recommendation_generation"
+  ],
+  "schemas": {
+    "input": {
+      "type": "object",
+      "required": ["subject"],
+      "properties": {
+        "workflow_id": { "type": "string" },
+        "stage": { "type": "string", "default": "recovery" },
+        "action": { "type": "string", "enum": ["investigate", "recovery", "run", "audit", "evaluate", "default"] },
+        "subject": {
+          "type": "object",
+          "required": ["org_id"],
+          "properties": {
+            "org_id": { "type": "string" },
+            "unit_id": { "type": "string" },
+            "shipment_id": { "type": "string" },
+            "order_id": { "type": "string" },
+            "sku": { "type": "string" },
+            "fnsku": { "type": "string" }
+          }
+        },
+        "fee_lines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["charge_id", "reason", "amount"],
+            "properties": {
+              "charge_id": { "type": "string" },
+              "reason": { "type": "string" },
+              "amount": { "type": "number" },
+              "currency": { "type": "string", "default": "USD" },
+              "charge_date": { "type": "string" }
+            }
+          }
+        },
+        "previous_evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["record_id", "source_stage", "finding"],
+            "properties": {
+              "record_id": { "type": "string" },
+              "source_stage": { "type": "string", "enum": ["receiving", "prep", "pack", "returns"] },
+              "finding": { "type": "string", "enum": ["PASS", "FAIL", "UNCERTAIN", "RESTOCKED", "DISPOSED", "SHORTAGE", "DAMAGED"] },
+              "metadata": { "type": "object" },
+              "captured_at": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "required": ["workflow_id", "stage", "subject", "verdict", "outcome", "checks", "payload", "metadata"],
+      "properties": {
+        "workflow_id": { "type": "string" },
+        "stage": { "type": "string" },
+        "subject": { "type": "object" },
+        "verdict": { "type": "string", "enum": ["claim_recommended", "no_claim", "needs_human"] },
+        "outcome": { "type": "string", "enum": ["claim_recommended", "no_claim", "needs_human"] },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["check_key", "verdict", "expected", "observed", "detail", "confidence", "upstream_refs", "payload"],
+            "properties": {
+              "check_key": { "type": "string" },
+              "verdict": { "type": "string", "enum": ["PASS", "FAIL", "SILENT", "UNCERTAIN", "DUPLICATE", "ALREADY_REIMBURSED"] },
+              "expected": { "type": "string" },
+              "observed": { "type": "string" },
+              "detail": { "type": "string" },
+              "confidence": { "type": "number" },
+              "upstream_refs": { "type": "array", "items": { "type": "string" } },
+              "payload": {
+                "type": "object",
+                "required": ["charge_id", "assessment", "claim_amount", "currency", "reason"]
+              }
+            }
+          }
+        },
+        "payload": {
+          "type": "object",
+          "required": ["total_recoverable_amount", "currency", "needs_human", "charges_analyzed", "claims_recommended"]
+        },
+        "metadata": {
+          "type": "object",
+          "required": ["model", "model_version", "llm_calls", "cost_usd", "sha256", "input_hash", "produced_at", "fallback_used"]
+        }
+      }
+    }
+  }
+}

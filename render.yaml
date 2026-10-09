@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: recovery-manager-agent
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: standard
+    region: oregon
+    branch: main
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: REQUIRE_AUTH
+        value: "true"
+      - key: AGENT_API_KEY
+        generateValue: true
+      - key: ALLOWED_ORGS
+        value: "org_demo_alpha,org_demo_bravo"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PORT
+        value: "8000"
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        value: "sqlite:////app/backend/data/recovery_manager.db"
+    disk:
+      name: recovery-data
+      mountPath: /app/backend/data
+      sizeGB: 1
