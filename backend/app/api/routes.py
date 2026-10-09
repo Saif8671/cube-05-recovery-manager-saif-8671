@@ -21,29 +21,39 @@ from app.services.claim_service import claim_service
 from app.services.stats_service import stats_service
 from app.storage.storage_service import storage_service
 from app.ingestion.parsers import ingestion_parser
+from app.api.auth import verify_api_key
+from app.api.tenancy import resolve_org_id
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 
 # --- Tenant & Auth Endpoints ---
 
 @router.get("/companies", response_model=List[CompanyResponse])
-def get_companies(db: Session = Depends(get_db)):
-    return db.query(Company).all()
+def get_companies(
+    company_id: str = Depends(resolve_org_id),
+    db: Session = Depends(get_db)
+):
+    return db.query(Company).filter(Company.id == company_id).all()
 
 @router.post("/companies", response_model=CompanyResponse)
-def create_company(payload: CompanyCreate, db: Session = Depends(get_db)):
-    cid = payload.id or str(uuid.uuid4())
-    comp = Company(id=cid, name=payload.name)
-    db.add(comp)
-    db.commit()
-    db.refresh(comp)
+def create_company(
+    payload: CompanyCreate,
+    company_id: str = Depends(resolve_org_id),
+    db: Session = Depends(get_db)
+):
+    comp = db.query(Company).filter(Company.id == company_id).first()
+    if not comp:
+        comp = Company(id=company_id, name=payload.name)
+        db.add(comp)
+        db.commit()
+        db.refresh(comp)
     return comp
 
 # --- Dashboard & Metrics ---
 
 @router.get("/dashboard/summary", response_model=DashboardMetrics)
 def get_dashboard_summary(
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     return stats_service.get_dashboard_metrics(db, company_id)
@@ -52,7 +62,7 @@ def get_dashboard_summary(
 
 @router.get("/charges")
 def get_charges(
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     search: Optional[str] = None,
     status: Optional[str] = None,
     assessment: Optional[str] = None,
@@ -60,8 +70,6 @@ def get_charges(
     offset: int = 0,
     db: Session = Depends(get_db)
 ):
-    if company_id in ["undefined", "null", ""]:
-        company_id = "org_demo_alpha"
     if search in ["undefined", "null", ""]:
         search = None
     if status in ["undefined", "null", "", "ALL"]:
@@ -73,7 +81,7 @@ def get_charges(
 @router.get("/charges/{charge_id}")
 def get_charge_detail(
     charge_id: str,
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     charge = charge_service.get_charge(db, company_id, charge_id)
@@ -82,9 +90,13 @@ def get_charge_detail(
     return charge
 
 @router.post("/charges", response_model=ChargeResponse)
-def create_manual_charge(payload: ChargeCreate, db: Session = Depends(get_db)):
+def create_manual_charge(
+    payload: ChargeCreate,
+    company_id: str = Depends(resolve_org_id),
+    db: Session = Depends(get_db)
+):
     c = Charge(
-        company_id=payload.company_id,
+        company_id=company_id,
         charge_id=payload.charge_id,
         unit_id=payload.unit_id,
         shipment_id=payload.shipment_id,
@@ -104,7 +116,7 @@ def create_manual_charge(payload: ChargeCreate, db: Session = Depends(get_db)):
 
 @router.post("/charges/batch/investigate")
 def batch_investigate(
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     return charge_service.run_batch_investigations(db, company_id)
@@ -113,14 +125,12 @@ def batch_investigate(
 
 @router.get("/evidence")
 def get_evidence_list(
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     source_type: Optional[str] = None,
     unit_id: Optional[str] = None,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    if company_id in ["undefined", "null", ""]:
-        company_id = "org_demo_alpha"
     if source_type in ["undefined", "null", "", "ALL", "all"]:
         source_type = None
     if unit_id in ["undefined", "null", ""]:
@@ -130,7 +140,7 @@ def get_evidence_list(
 @router.get("/evidence/{evidence_id}")
 def get_evidence_detail(
     evidence_id: str,
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     ev = evidence_service.get_evidence_by_id(db, company_id, evidence_id)
@@ -139,9 +149,13 @@ def get_evidence_detail(
     return ev
 
 @router.post("/evidence", response_model=EvidenceResponse)
-def create_manual_evidence(payload: EvidenceCreate, db: Session = Depends(get_db)):
+def create_manual_evidence(
+    payload: EvidenceCreate,
+    company_id: str = Depends(resolve_org_id),
+    db: Session = Depends(get_db)
+):
     ev = EvidenceRecord(
-        company_id=payload.company_id,
+        company_id=company_id,
         evidence_id=payload.evidence_id,
         source_type=payload.source_type,
         unit_id=payload.unit_id,
@@ -159,7 +173,7 @@ def create_manual_evidence(payload: EvidenceCreate, db: Session = Depends(get_db
     db.add(ev)
     if payload.description:
         chunk = EvidenceChunk(
-            company_id=payload.company_id,
+            company_id=company_id,
             evidence_id=payload.evidence_id,
             content=payload.description,
             embedding=hybrid_retrieval_engine.get_embedding(payload.description),
@@ -173,7 +187,7 @@ def create_manual_evidence(payload: EvidenceCreate, db: Session = Depends(get_db
 @router.get("/evidence/graph/{charge_id}")
 def get_evidence_graph(
     charge_id: str,
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     return evidence_service.build_evidence_graph(db, company_id, charge_id)
@@ -183,7 +197,7 @@ def get_evidence_graph(
 @router.post("/investigations/{charge_id}/run", response_model=InvestigationResult)
 def run_charge_investigation(
     charge_id: str,
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     charge = charge_service.get_charge(db, company_id, charge_id)
@@ -194,7 +208,7 @@ def run_charge_investigation(
 @router.get("/investigations/{charge_id}", response_model=InvestigationResult)
 def get_investigation_result(
     charge_id: str,
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     res = investigation_service.get_investigation_by_charge(db, company_id, charge_id)
@@ -206,7 +220,7 @@ def get_investigation_result(
 
 @router.get("/recovery/opportunities")
 def get_recovery_opportunities(
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     # Retrieve all contradicted charges with positive claim amount
@@ -240,18 +254,22 @@ def get_recovery_opportunities(
     return opportunities
 
 @router.post("/claims", response_model=ClaimResponse)
-def create_claim(payload: ClaimCreate, db: Session = Depends(get_db)):
+def create_claim(
+    payload: ClaimCreate,
+    company_id: str = Depends(resolve_org_id),
+    db: Session = Depends(get_db)
+):
     try:
-        claim = claim_service.generate_claim_package(db, payload.company_id, payload.charge_id)
+        claim = claim_service.generate_claim_package(db, company_id, payload.charge_id)
         if not claim:
             raise HTTPException(status_code=404, detail="Charge not found")
         return claim
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e))
 
 @router.get("/claims", response_model=List[ClaimResponse])
 def get_claims(
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     return claim_service.list_claims(db, company_id)
@@ -259,7 +277,7 @@ def get_claims(
 @router.get("/claims/{claim_id}", response_model=ClaimResponse)
 def get_claim_detail(
     claim_id: str,
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     claim = claim_service.get_claim(db, company_id, claim_id)
@@ -271,7 +289,7 @@ def get_claim_detail(
 def update_claim_status(
     claim_id: str,
     status: str = Query(..., description="DRAFT, SUBMITTED, PAID, REJECTED"),
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     claim = claim_service.update_claim_status(db, company_id, claim_id, status)
@@ -284,7 +302,7 @@ def update_claim_status(
 @router.post("/files/upload-preview")
 async def preview_file_upload(
     file: UploadFile = File(...),
-    company_id: str = Form("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     file_type: Optional[str] = Form(None)
 ):
     content = await file.read()
@@ -296,7 +314,7 @@ async def preview_file_upload(
 @router.post("/files/import")
 async def import_file(
     file: UploadFile = File(...),
-    company_id: str = Form("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     file_type: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
@@ -418,7 +436,7 @@ async def import_file(
 
 @router.get("/files")
 def list_uploaded_files(
-    company_id: str = Query("org_demo_alpha"),
+    company_id: str = Depends(resolve_org_id),
     db: Session = Depends(get_db)
 ):
     return db.query(SourceFile).filter(SourceFile.company_id == company_id).order_by(SourceFile.uploaded_at.desc()).all()

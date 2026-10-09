@@ -45,7 +45,8 @@ class ChargeBase(BaseModel):
     charge_date: Optional[str] = None
 
 class ChargeCreate(ChargeBase):
-    company_id: str
+    company_id: Optional[str] = None
+    org_id: Optional[str] = None
 
 class ChargeResponse(ChargeBase):
     id: str
@@ -72,7 +73,8 @@ class EvidenceBase(BaseModel):
     timestamp: Optional[str] = None
 
 class EvidenceCreate(EvidenceBase):
-    company_id: str
+    company_id: Optional[str] = None
+    org_id: Optional[str] = None
 
 class EvidenceResponse(EvidenceBase):
     id: str
@@ -116,8 +118,10 @@ class InvestigationResponse(InvestigationResult):
 
 # --- Claim Schemas ---
 class ClaimCreate(BaseModel):
-    company_id: str
+    company_id: Optional[str] = None
+    org_id: Optional[str] = None
     charge_id: str
+
 
 class ClaimResponse(BaseModel):
     id: str

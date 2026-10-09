@@ -15,9 +15,8 @@ from app.services.stats_service import stats_service
 from app.services.llm_reasoner import llm_recovery_reasoner
 from app.rag.retrieval import hybrid_retrieval_engine
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def db_session():
-    init_db()
     session = SessionLocal()
     yield session
     session.close()
@@ -33,16 +32,45 @@ def test_tenant_isolation(db_session):
     assert len(alpha_charges) > 0
     assert len(bravo_charges) > 0
     
-    alpha_ids = {c.charge_id for c in alpha_charges}
-    bravo_ids = {c.charge_id for c in bravo_charges}
+    alpha_charge_ids = {c.charge_id for c in alpha_charges}
+    bravo_charge_ids = {c.charge_id for c in bravo_charges}
     
-    # Strictly zero overlap
-    assert len(alpha_ids.intersection(bravo_ids)) == 0
+    # Strictly zero overlap in charge IDs
+    assert alpha_charge_ids.isdisjoint(bravo_charge_ids)
 
-    # Query with company_id filter must return exactly tenant data
-    query_result = charge_service.list_charges(db_session, company_id="org_demo_alpha")
-    for row in query_result:
+    # 1. Query charges with company_id filter must return exclusively tenant data
+    alpha_query_result = charge_service.list_charges(db_session, company_id="org_demo_alpha")
+    assert len(alpha_query_result) > 0
+    for row in alpha_query_result:
         assert row["company_id"] == "org_demo_alpha"
+        assert row["charge_id"] not in bravo_charge_ids
+
+    bravo_query_result = charge_service.list_charges(db_session, company_id="org_demo_bravo")
+    assert len(bravo_query_result) > 0
+    for row in bravo_query_result:
+        assert row["company_id"] == "org_demo_bravo"
+        assert row["charge_id"] not in alpha_charge_ids
+
+    # 2. Evidence queries must strictly isolate tenant records
+    alpha_evidence = db_session.query(EvidenceRecord).filter(EvidenceRecord.company_id == "org_demo_alpha").all()
+    bravo_evidence = db_session.query(EvidenceRecord).filter(EvidenceRecord.company_id == "org_demo_bravo").all()
+
+    assert len(alpha_evidence) > 0
+    assert len(bravo_evidence) > 0
+
+    alpha_ev_ids = {e.evidence_id for e in alpha_evidence}
+    bravo_ev_ids = {e.evidence_id for e in bravo_evidence}
+
+    assert alpha_ev_ids.isdisjoint(bravo_ev_ids)
+
+    # 3. Multi-hop retrieval on an Alpha charge must never return Bravo evidence and vice versa
+    retrieved_for_alpha = hybrid_retrieval_engine.retrieve_evidence_multi_hop(db_session, alpha_charges[0])
+    for item in retrieved_for_alpha:
+        assert item["evidence_id"] not in bravo_ev_ids
+
+    retrieved_for_bravo = hybrid_retrieval_engine.retrieve_evidence_multi_hop(db_session, bravo_charges[0])
+    for item in retrieved_for_bravo:
+        assert item["evidence_id"] not in alpha_ev_ids
 
 def test_rule_never_invent_evidence_silent_result(db_session):
     """

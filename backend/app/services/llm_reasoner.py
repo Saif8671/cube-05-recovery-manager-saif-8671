@@ -18,6 +18,24 @@ class LLMRecoveryReasoner:
     - Conservative bias: Return SILENT or UNCERTAIN when facts are incomplete or ambiguous
     """
 
+    last_call_info: Dict[str, Any] = {
+        "model": "deterministic-rule-engine",
+        "model_version": "1.0.0",
+        "llm_calls": 0,
+        "cost_usd": 0.0,
+        "fallback_used": False
+    }
+
+    @classmethod
+    def reset_call_info(cls):
+        cls.last_call_info = {
+            "model": "deterministic-rule-engine",
+            "model_version": "1.0.0",
+            "llm_calls": 0,
+            "cost_usd": 0.0,
+            "fallback_used": False
+        }
+
     @classmethod
     def analyze_unmodeled_charge(
         cls,
@@ -29,11 +47,19 @@ class LLMRecoveryReasoner:
     ) -> Optional[Dict[str, Any]]:
         """
         Uses Gemini to analyze evidence when rule-based deterministic templates
-        do not cover the fee category.
+        do not cover the fee category. Falls back to local deterministic reasoner
+        if API key is missing or service is unavailable.
         """
         api_key = settings.GEMINI_API_KEY
         if not api_key:
-            return None
+            cls.last_call_info = {
+                "model": "local-forensic-fallback (key missing)",
+                "model_version": "1.0.0",
+                "llm_calls": 0,
+                "cost_usd": 0.0,
+                "fallback_used": True
+            }
+            return cls._local_forensic_eval(charge_reason, charge_amount, currency, charge_metadata, evidence_items)
 
         prompt = cls._build_prompt(
             charge_reason=charge_reason,
@@ -73,6 +99,13 @@ class LLMRecoveryReasoner:
                         )
                         if text_content:
                             parsed = json.loads(text_content)
+                            cls.last_call_info = {
+                                "model": "gemini-2.5-flash",
+                                "model_version": "v1beta",
+                                "llm_calls": cls.last_call_info.get("llm_calls", 0) + 1,
+                                "cost_usd": cls.last_call_info.get("cost_usd", 0.0) + 0.0001,
+                                "fallback_used": False
+                            }
                             return cls._validate_and_sanitize(parsed, charge_amount, currency)
                     else:
                         logger.warning(f"Gemini API returned status {resp.status_code}: {resp.text}")
@@ -81,6 +114,13 @@ class LLMRecoveryReasoner:
             logger.warning(f"Gemini reasoning failed or timed out: {e}")
 
         # Local Offline Forensic Reasoner Fallback
+        cls.last_call_info = {
+            "model": "local-forensic-fallback (gemini unavailable)",
+            "model_version": "1.0.0",
+            "llm_calls": cls.last_call_info.get("llm_calls", 0),
+            "cost_usd": 0.0,
+            "fallback_used": True
+        }
         return cls._local_forensic_eval(charge_reason, charge_amount, currency, charge_metadata, evidence_items)
 
     @classmethod

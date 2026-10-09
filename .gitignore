@@ -10,5 +10,5 @@ venv/
 .next/
 .pytest_cache/
 *.db
+backend/uploads/
 uploads/
-

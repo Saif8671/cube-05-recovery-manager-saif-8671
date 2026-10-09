@@ -23,9 +23,22 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     
-    # Security & Auth
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "rcy-recovery-manager-super-secret-key-2026")
+    # Security, Auth & Tenancy
+    REQUIRE_AUTH: bool = False
+    SECRET_KEY: str = ""
+    AGENT_API_KEY: str = ""
+    ALLOWED_ORGS: str = "org_demo_alpha,org_demo_bravo"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
+
+    def __init__(self, **values):
+        super().__init__(**values)
+        if self.REQUIRE_AUTH:
+            if not self.AGENT_API_KEY:
+                raise RuntimeError("AGENT_API_KEY environment variable is required when REQUIRE_AUTH=true")
+
+    @property
+    def allowed_orgs_set(self) -> set:
+        return {org.strip() for org in self.ALLOWED_ORGS.split(",") if org.strip()}
     
     class Config:
         env_file = ".env"
@@ -33,3 +46,5 @@ class Settings(BaseSettings):
 
 settings = Settings()
 os.makedirs(settings.LOCAL_STORAGE_DIR, exist_ok=True)
+
+
